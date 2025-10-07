@@ -1,0 +1,13 @@
+<!-- <div class="root" #root [ngStyle]="{ top: y + 'px', left: x + 'px' }"> -->
+<div class="root" #root [ngStyle]="{
+    transform: 'translate(' + x + 'px, ' + y + 'px)'
+  }">
+  <canvas #bgCanvas></canvas>
+  <div #mainContainer class="main-container">
+    <div *ngIf="isShowTitle" class="title-container">
+      <div class="title">{{ title }}</div>
+      <div class="btn-close" (click)="onClose()"></div>
+    </div>
+    <div #contentContainer class="content"></div>
+  </div>
+</div>

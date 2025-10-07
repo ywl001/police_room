@@ -1,0 +1,51 @@
+<h2 mat-dialog-title>属性</h2>
+
+<mat-dialog-content class="dialog-content" [formGroup]="form">
+    @if(editType == 'room'){
+    <mat-form-field appearance="outline" class="w-full">
+        <mat-label>名称</mat-label>
+        <input matInput formControlName="name" />
+        @if (form.get('name')?.hasError('required')) {
+        <mat-error>
+            名称不能为空
+        </mat-error>
+        }
+    </mat-form-field>
+    }
+
+    <mat-form-field appearance="outline" class="w-full">
+        <mat-label>简介</mat-label>
+        <textarea matInput rows="3" formControlName="summary"></textarea>
+    </mat-form-field>
+
+    @if( editType== 'room'){
+    <div class="village-list">
+        <label class="text-gray-700 font-medium mb-2 block">包含村庄：</label>
+        <mat-selection-list (selectionChange)="onVillageChange($event)">
+            @for (item of villages; track $index) {
+            <mat-list-option [value]="item" [selected]="data?.attributes?.include_villages?.includes(item.id)">
+                {{ item.name }}
+            </mat-list-option>
+            }
+
+        </mat-selection-list>
+    </div>
+    }
+
+    @if(selectedVillages.length > 0){
+        <div class="selected-villages">
+            <span class="label">已选择：</span>
+            <div class="tags">
+                @for (item of selectedVillages; track $index) {
+                <span class="tag">{{ item.name}}、</span>
+                }
+            </div>
+        </div>
+    }
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <button mat-stroked-button (click)="onCancel()">取消</button>
+    <button mat-flat-button color="primary" (click)="onConfirm()">确定</button>
+</mat-dialog-actions>

@@ -1,0 +1,89 @@
+.root {
+
+  top: 0;
+  left: 0;
+
+  position: absolute;
+  will-change: transform;
+  backface-visibility: hidden;
+  contain: layout style;
+  pointer-events: auto;
+  z-index: 999;
+  transition: transform 0.2s ease-out;
+  visibility: hidden;
+  
+
+  &.visible {
+    visibility: visible;
+  }
+
+  canvas {
+    position: absolute;
+  }
+
+  .main-container {
+    position: relative;
+    background-color: transparent; // 背景透明，显示 Canvas 填充
+    margin-left: var(--margin-left, 2px);
+    margin-right: var(--margin-right, 2px);
+    margin-top: var(--margin-top, 2px);
+    margin-bottom: var(--margin-bottom, 2px);
+
+    .title-container {
+      display: flex;
+      border-bottom: solid 1px;
+      align-items: center;
+
+      .title {
+        flex: 1;
+        height: 30px;
+        line-height: 30px;
+        padding: 5px 10px;
+        font-size: 18px;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .btn-close {
+        position: relative;
+        width: 30px;
+        height: 30px;
+        margin-left: 10px;
+        cursor: pointer;
+      
+        &::before,
+        &::after {
+          content: '';
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 20px;   // 横线长度
+          height: 2px;   // 线条粗细
+          background-color: #333;
+          transform-origin: center;
+          transition: background-color 0.2s;
+        }
+      
+        &::before {
+          transform: translate(-50%, -50%) rotate(45deg);
+        }
+      
+        &::after {
+          transform: translate(-50%, -50%) rotate(-45deg);
+        }
+      
+        &:hover::before,
+        &:hover::after {
+          background-color: red; // hover 颜色
+        }
+      }
+      
+    }
+
+    .content {
+      z-index: 1;
+    }
+  }
+}

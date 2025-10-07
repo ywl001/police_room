@@ -1,0 +1,11 @@
+<div class="menu">
+    @if(type == 'room'){
+        <button (click)="onEdit()">编辑</button>
+        <button (click)="onMove()">移动</button>
+        <button (click)="onDelete()">删除</button>
+    }
+    @if(type != 'room'){
+        <button (click)="onEdit()">编辑简介</button>
+        <button (click)="onPeople()">编辑人员</button>
+    }
+</div>
