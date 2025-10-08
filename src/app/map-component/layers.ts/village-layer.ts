@@ -10,6 +10,7 @@ import { Type } from "@angular/core";
 import { AppInjector } from "../../app-injector";
 import { AppState } from "../../app.state";
 import { GeomUtils } from "../../GemoUtils";
+import { AppEventType } from "../../event.bus";
 
 export class VillageLayer extends BaseLayer {
 
@@ -69,7 +70,7 @@ export class VillageLayer extends BaseLayer {
             (g as any)._originalSymbol = (g.symbol as any).clone();
         }
 
-        const newSymbol = this.symbolService.getFillSymbol(g.attributes.name, ColorPlan.white_blue, 18, -18, 0, 0, 1,) as any
+        const newSymbol = this.symbolService.getFillSymbol(g.attributes.name, ColorPlan.white_blue, 14, -18, 0, 0, 1,) as any
         g.symbol = newSymbol
     }
 
@@ -84,10 +85,9 @@ export class VillageLayer extends BaseLayer {
         console.log('village click:', graphic.attributes)
     }
 
-
     override onRightClick(graphic: Graphic, event: __esri.ViewClickEvent): void {
         console.log('village click')
-        this.message.showInfoWindow(ContextMenu, graphic)
+        this.eventBus.emit(AppEventType.ShowInfoWindow,{component:ContextMenu,graphic})
     }
 
     override getAttributeDialogComponent(): Type<any> {

@@ -1,11 +1,9 @@
-import { OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output } from '@angular/core';
-import { MessageService, MessageType } from '../message.service';
+import { Component } from '@angular/core';
 import Graphic from '@arcgis/core/Graphic';
 import { BaseLayer } from '../map-component/layers.ts/base-layer';
 import { SketchManagerService } from '../map-component/sketch-manager.service';
-import { G } from '@angular/cdk/keycodes';
+import { AppEventType, EventBus } from './../event.bus';
 
 
 @Component({
@@ -27,7 +25,7 @@ export class ContextMenu {
 
   type:string = 'room'
 
-  constructor(private message: MessageService,private sketchManager:SketchManagerService) { }
+  constructor(private eventBus:EventBus,private sketchManager:SketchManagerService) { }
 
   ngOnInit() {
     console.log('menu init')
@@ -35,18 +33,18 @@ export class ContextMenu {
 
   onEdit() {
     console.log('edit')
-    this.message.editAttributes(this.data)
-    this.message.sendMessage(MessageType.closeInfowindow)
+    this.eventBus.emit(AppEventType.EditAttributes,this.data)
+    this.eventBus.emit(AppEventType.closeInfoWindow)
   }
 
   onDelete() {
-    this.message.delFeature(this.data)
-    this.message.sendMessage(MessageType.closeInfowindow)
+    this.eventBus.emit(AppEventType.DeleteFeature,this.data)
+    this.eventBus.emit(AppEventType.closeInfoWindow)
   }
 
   onMove() {
+    this.eventBus.emit(AppEventType.closeInfoWindow)
     this.sketchManager.startEdit(this.data)
-    this.message.sendMessage(MessageType.closeInfowindow)
   }
 
   onPeople() {

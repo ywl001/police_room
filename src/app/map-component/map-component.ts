@@ -1,27 +1,23 @@
 import { Component, ElementRef, signal, ViewChild } from '@angular/core';
-import esriConfig from "@arcgis/core/config";
-import MapView from '@arcgis/core/views/MapView';
+import { MatDialog } from '@angular/material/dialog';
+import { ActivatedRoute, Router } from '@angular/router';
 import EsriMap from "@arcgis/core/Map";
+import esriConfig from "@arcgis/core/config";
+import Extent from "@arcgis/core/geometry/Extent.js";
+import Geometry from "@arcgis/core/geometry/Geometry.js";
 import Point from '@arcgis/core/geometry/Point';
+import Polygon from '@arcgis/core/geometry/Polygon';
+import MapView from '@arcgis/core/views/MapView';
+import { firstValueFrom, ReplaySubject, Subject } from 'rxjs';
+import { ContextMenu } from '../context-menu/context-menu';
+import { AppEventType, EventBus } from '../event.bus';
+import { InfowindowComponent } from "./infowindow/infowindow.component";
+import { OutlineLayer } from './layers.ts/outline-layer';
+import { PoliceRoomLayer } from './layers.ts/police-room-layer';
 import { TownLayer } from './layers.ts/town-layer';
 import { VillageLayer } from './layers.ts/village-layer';
 import { MapEventManager } from './map-event-manager';
-import { InfowindowComponent } from "./infowindow/infowindow.component";
-import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom, ReplaySubject, Subject, takeUntil } from 'rxjs';
-import Extent from "@arcgis/core/geometry/Extent.js";
-import * as geometryEngine from "@arcgis/core/geometry/geometryEngine";
-import { PoliceRoomLayer } from './layers.ts/police-room-layer';
 import { SketchManagerService } from './sketch-manager.service';
-import { MessageService, MessageType } from '../message.service';
-import { MatDialog } from '@angular/material/dialog';
-import { AttributeDialog } from '../attribute-dialog/attribute-dialog';
-import { OutlineLayer } from './layers.ts/outline-layer';
-import Geometry from "@arcgis/core/geometry/Geometry.js";
-import Polygon from '@arcgis/core/geometry/Polygon';
-import { ContextMenu } from '../context-menu/context-menu';
-import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-import VectorTileLayer from "@arcgis/core/layers/VectorTileLayer.js";
 
 @Component({
   selector: 'app-map-component',
@@ -70,9 +66,9 @@ export class MapComponent {
     private eventManager: MapEventManager,
     private sketchManager: SketchManagerService,
     private dialog: MatDialog,
-    private message: MessageService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private eventBus:EventBus
   ) { }
 
   ngOnInit() {
@@ -95,20 +91,24 @@ export class MapComponent {
       }
     });
 
-    this.message.showInfoWindow$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(msg => {
-        this.showInfoWindow(msg)
-      })
+    this.eventBus.on(AppEventType.ShowInfoWindow,(msg)=>{this.showInfoWindow(msg)})
+
+    this.eventBus.on(AppEventType.closeInfoWindow,()=>this.infowindow.hide())
+
+    // this.message.showInfoWindow$
+    //   .pipe(takeUntil(this.destroy$))
+    //   .subscribe(msg => {
+    //     this.showInfoWindow(msg)
+    //   })
 
 
-    this.message.message$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((type) => {
-        if (type == MessageType.closeInfowindow || type == MessageType.clickMap) {
-          this.infowindow.hide()
-        }
-      })
+    // this.message.message$
+    //   .pipe(takeUntil(this.destroy$))
+    //   .subscribe((type) => {
+    //     if (type == MessageType.closeInfowindow || type == MessageType.clickMap) {
+    //       this.infowindow.hide()
+    //     }
+    //   })
   }
 
   showTownLayer() {
@@ -171,12 +171,12 @@ export class MapComponent {
     await this.townLayer.init()
     this.map.add(this.townLayer);
 
-    const tile = new VectorTileLayer({
-      url: 'http://localhost:8081/map_tile/mengjin/p12',
-      minScale: 20000,  // 小于 1:5000 不显示（地图更放大）
-      maxScale: 250,
-    })
-    this.map.add(tile)
+    // const tile = new VectorTileLayer({
+    //   url: 'http://localhost:8081/map_tile/mengjin/p12',
+    //   minScale: 20000,  // 小于 1:5000 不显示（地图更放大）
+    //   maxScale: 250,
+    // })
+    // this.map.add(tile)
 
     this.mapView.when(() => {
       this.eventManager.init(this.mapView);
@@ -186,12 +186,12 @@ export class MapComponent {
       this.mapReady$.next();
       console.log('map is ready')
 
-      reactiveUtils.watch(
-        () => this.mapView.scale,
-        (scale) => {
-          console.log(scale)
-        }
-      )
+      // reactiveUtils.watch(
+      //   () => this.mapView.scale,
+      //   (scale) => {
+      //     console.log(scale)
+      //   }
+      // )
     });
   }
 
@@ -244,7 +244,8 @@ export class MapComponent {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-    // this.outlineLayer?.destroy();
     this.map.layers.forEach(item => item.destroy())
+
+    this.eventBus.clearAll()
   }
 }

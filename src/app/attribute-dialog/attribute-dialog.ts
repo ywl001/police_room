@@ -1,16 +1,15 @@
-import { Component, Inject, Signal, signal } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MessageService } from '../message.service';
 import { CommonModule } from '@angular/common';
+import { Component, Inject } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatListModule, MatSelectionListChange } from '@angular/material/list';
-import { AppState } from '../app.state';
 import Polygon from '@arcgis/core/geometry/Polygon';
 import * as geometryEngine from "@arcgis/core/geometry/geometryEngine.js";
 import { GeomUtils } from '../GemoUtils';
+import { AppState } from '../app.state';
 
 
 enum EditType {
@@ -43,7 +42,7 @@ export class AttributeDialog {
   name = '';
   summary = '';
 
-  selectedVillages:any[] = []
+  selectedVillages: any[] = []
 
   form: FormGroup;
   editType: EditType = EditType.room;
@@ -73,7 +72,7 @@ export class AttributeDialog {
     console.log('state', this.state)
 
     if (data?.attributes?.include_villages?.length) {
-      this.selectedVillages =  this.villages.filter((v: any) =>
+      this.selectedVillages = this.villages.filter((v: any) =>
         data.attributes.include_villages!.includes(v.id)
       );
     }
@@ -95,12 +94,9 @@ export class AttributeDialog {
       const villageIds = this.selectedVillages.map(v => v.id);
       const vp = this.getVillagesPolygon(villageIds);
       newData = Object.assign(this.form.value, { include_villages: villageIds, villages_outline: vp, town: this.town })
-      // newData = Object.assign(this.form.value, { include_villages: villageIds, town: this.town })
     } else {
       newData = Object.assign(this.form.value)
     }
-
-    // console.log(newData,this.data.attributes)
 
     if (this.state === State.edit) {
       const change = this.getChangedFields(newData, this.data)
@@ -143,37 +139,14 @@ export class AttributeDialog {
       .map(id => this.villages.find(v => v.id === id))
       .map(v => v.geom[0].map((p: any) => [p.x, p.y]))
       .map(geom => new Polygon({ rings: [geom] }));
-  
+
     const mergedGeometry = geometryEngine.union(polygons as Polygon[]) as Polygon;
-  
+
     // mergedGeometry.rings 可能是二维数组：多个不连通的 ring
     // 判断是否有多面
     if (!mergedGeometry.rings || mergedGeometry.rings.length === 0) return null;
-  
+
     return GeomUtils.toMysqlAuto(mergedGeometry)
   }
-
-  // private toWKT(geometry: Polygon): string {
-  //   if (!geometry?.rings?.length) {
-  //     throw new Error("无效的 geometry：缺少 rings");
-  //   }
-  
-  //   const formatRing = (ring: number[][]) =>
-  //     ring.map(([x, y]) => `${x} ${y}`).join(", ");
-  
-  //   if (geometry.rings.length === 1) {
-  //     // 单面 POLYGON
-  //     const rings = formatRing(geometry.rings[0]);
-  //     return `POLYGON((${rings}))`;
-  //   } else {
-  //     // 多面 MULTIPOLYGON
-  //     const multi = geometry.rings
-  //       .map(ring => `((${formatRing(ring)}))`)
-  //       .join(", ");
-  //     return `MULTIPOLYGON(${multi})`;
-  //   }
-  // }
-  
-  
 
 }

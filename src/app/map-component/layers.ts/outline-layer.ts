@@ -5,6 +5,8 @@ import * as geometryEngine from "@arcgis/core/geometry/geometryEngine.js";
 import Polygon from "@arcgis/core/geometry/Polygon";
 import Graphic from "@arcgis/core/Graphic";
 import { GeomUtils } from "../../GemoUtils";
+import { EventType } from "@angular/router";
+import { AppEventType } from "../../event.bus";
 
 export class OutlineLayer extends BaseLayer {
     override getInitData(): Observable<any[]> {
@@ -20,23 +22,26 @@ export class OutlineLayer extends BaseLayer {
 
     constructor(mapView: MapView) {
         super(mapView)
-        this.message.showOutline$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe((res: any) => {
-                this.addGraphic(res)
-            })
+        // this.message.showOutline$
+        //     .pipe(takeUntil(this.destroy$))
+        //     .subscribe((res: any) => {
+        //         this.addGraphic(res)
+        //     })
 
-        this.message.clearOutline$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(() => {
-                console.log('out line remove all')
-                this.removeAll()
-            })
+        this.eventBus.on(AppEventType.showOutline,(outline)=>{this.addGraphic(outline)})
+        this.eventBus.on(AppEventType.ClearOutline,()=>{this.removeAll()})
+
+        // this.message.clearOutline$
+        //     .pipe(takeUntil(this.destroy$))
+        //     .subscribe(() => {
+        //         console.log('out line remove all')
+        //         this.removeAll()
+        //     })
     }
 
     addGraphic(outline: any) {
-        // console.log('outline addgraphic', villageids)
-        console.log(outline)
+        console.log('outline addgraphic')
+        // console.log(outline)
         this.removeAll()
         const p = GeomUtils.toGeometryAuto(outline)
         const outLineGraphic = new Graphic({

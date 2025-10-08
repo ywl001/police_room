@@ -1,17 +1,10 @@
-import Polygon from "@arcgis/core/geometry/Polygon";
-import { BaseLayer } from "./base-layer";
-import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
-import MapView from "@arcgis/core/views/MapView";
-import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
-import PopupTemplate from "@arcgis/core/PopupTemplate.js";
-import Point from "@arcgis/core/geometry/Point";
-import ActionButton from "@arcgis/core/support/actions/ActionButton.js";
-import { AppInjector } from "../../app-injector";
 import { Router } from "@angular/router";
-import { firstValueFrom, Observable } from "rxjs";
-import Graphic from "@arcgis/core/Graphic";
-import { ColorPlan } from "../../symbol.service";
+import MapView from "@arcgis/core/views/MapView";
+import { Observable } from "rxjs";
+import { AppInjector } from "../../app-injector";
 import { GeomUtils } from "../../GemoUtils";
+import { ColorPlan } from "../../symbol.service";
+import { BaseLayer } from "./base-layer";
 
 export class TownLayer extends BaseLayer {
 
@@ -42,7 +35,6 @@ export class TownLayer extends BaseLayer {
 
 
     override onClick(graphic: __esri.Graphic, event: __esri.ViewClickEvent): void {
-        super.onClick(graphic, event)
         console.log('town layer click')
         this.router.navigate(['/town', graphic.attributes.name]);
 
@@ -50,7 +42,6 @@ export class TownLayer extends BaseLayer {
 
     override onRightClick(graphic: __esri.Graphic, event: __esri.ViewClickEvent): void {
         console.log('town layer right click')
-
     }
 
     override onMouseOver(g: __esri.Graphic, event: __esri.ViewPointerMoveEvent): void {

@@ -8,6 +8,7 @@ import { ContextMenu } from "../../context-menu/context-menu";
 import { Type } from "@angular/core";
 import { AttributeDialog } from "../../attribute-dialog/attribute-dialog";
 import { GeomUtils } from "../../GemoUtils";
+import { AppEventType } from "../../event.bus";
 
 export class PoliceRoomLayer extends BaseLayer {
 
@@ -34,11 +35,15 @@ export class PoliceRoomLayer extends BaseLayer {
         ) as Observable<any[]>
     }
 
-    override getCreateUrl(): string {
+    override getCreateApiUrl(): string {
         return `http://localhost:3000/api/room`
     }
 
     override getUpdateApiUrl(id: number): string {
+        return `http://localhost:3000/api/room/${id}`
+    }
+
+    override getDeleteApiUrl(id: number): string {
         return `http://localhost:3000/api/room/${id}`
     }
 
@@ -58,7 +63,8 @@ export class PoliceRoomLayer extends BaseLayer {
             delete (g as any)._originalSymbol;
         }
         this.clearHighlight()
-        this.message.clearOutline()
+        // this.message.clearOutline()
+        this.eventBus.emit(AppEventType.ClearOutline)
     }
 
     override onMouseOver(g: __esri.Graphic, event: __esri.ViewPointerMoveEvent): void {
@@ -74,13 +80,14 @@ export class PoliceRoomLayer extends BaseLayer {
         const outline = g.attributes.villages_outline
 
         setTimeout(() => {
-            this.message.showOutline(outline)
+            // this.message.showOutline(outline)
+            this.eventBus.emit(AppEventType.showOutline,outline)
         }, 10);
     }
 
     override onRightClick(graphic: Graphic, event: __esri.ViewClickEvent): void {
         console.log('room layer right click')
-        this.message.showInfoWindow(ContextMenu, graphic)
+        this.eventBus.emit(AppEventType.ShowInfoWindow,{component:ContextMenu,graphic})
     }
 
     override getAttributeDialogComponent(): Type<any> {

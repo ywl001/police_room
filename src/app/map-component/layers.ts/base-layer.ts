@@ -1,105 +1,90 @@
-import { AppState } from './../../app.state';
 import { HttpClient } from "@angular/common/http";
-import Point from "@arcgis/core/geometry/Point";
-import Polygon from "@arcgis/core/geometry/Polygon";
-import Polyline from "@arcgis/core/geometry/Polyline";
-import * as projection from "@arcgis/core/geometry/projection";
-import SpatialReference from "@arcgis/core/geometry/SpatialReference";
+import { Type } from "@angular/core";
+import { MatDialog } from "@angular/material/dialog";
 import Graphic from "@arcgis/core/Graphic";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import MapView from "@arcgis/core/views/MapView";
+import { first, firstValueFrom, Observable, Subject } from "rxjs";
 import { AppInjector } from "../../app-injector";
-import { SymbolService } from "../../symbol.service";
-import { first, firstValueFrom, Observable, Subject, takeUntil } from "rxjs";
-import { MessageService } from "../../message.service";
-import { Type } from "@angular/core";
-import { MatDialog } from "@angular/material/dialog";
+import { AppEventType, EventBus } from "../../event.bus";
 import { GeomUtils } from '../../GemoUtils';
+import { SymbolService } from "../../symbol.service";
+import { AppState } from './../../app.state';
 
+/**
+ * ✅ BaseLayer
+ * 
+ * 所有业务图层的抽象基类：
+ * - 提供统一的数据加载逻辑；
+ * - 封装图层与服务（Http、Message、Symbol）的注入；
+ * - 提供创建、编辑、删除要素的通用方法；
+ * - 支持事件响应（点击 / 双击 / 悬停 / 右键）；
+ * - 管理高亮状态与资源释放；
+ */
 export abstract class BaseLayer extends GraphicsLayer {
+    /** 图层优先级（由 MapEventManager 用于 hitTest 判定） */
+    priority = 0;
 
-    priority = 0; // 统一优先级
-
-    // private static layers = new Map<string, BaseLayer>();
-
-    private highlightObjects = []
-
-    private highlightHandle: any | null = null;
-
+    /** 当前图层对应的 LayerView（由 layerview-create 获取） */
     public layerView!: __esri.GraphicsLayerView;
 
-    /** 当前选中的要素（用于编辑） */
+    /** 当前选中的要素（可用于编辑、属性面板等） */
     public selectedGraphic: Graphic | null = null;
 
-    http: HttpClient
+    /** 数据加载完成流（可供外部订阅） */
+    protected dataLoaded$ = new Subject<any[]>();
 
-    mapView: MapView
-
-    symbolService: SymbolService
-    message: MessageService
-
-    newGraphic!: Graphic
-
-    private dialog: MatDialog
-    appState:AppState
-
+    /** RxJS 销毁标志 */
     destroy$ = new Subject<void>();
 
-    protected dataLoaded$ = new Subject<any[]>();
+    /** 工具/服务依赖（通过全局 AppInjector 获取） */
+    protected http: HttpClient;
+    protected mapView: MapView;
+    protected symbolService: SymbolService;
+    // protected message: MessageService;
+    protected dialog: MatDialog;
+    protected appState: AppState;
+
+    /** 高亮句柄 */
+    private highlightHandle: IHandle | null = null;
+
+    eventBus: EventBus
 
     constructor(mapView: MapView) {
         super();
-        this.mapView = mapView
-        const appInjector = AppInjector.getInjector()
-        this.http = appInjector.get(HttpClient)
-        this.symbolService = appInjector.get(SymbolService)
-        this.message = appInjector.get(MessageService)
-        this.dialog = appInjector.get(MatDialog)
-        this.appState = appInjector.get(AppState)
+        this.mapView = mapView;
 
-        this.on("layerview-create", (event) => {
-            this.layerView = event.layerView as __esri.GraphicsLayerView;
+        // ✅ 全局依赖注入
+        const injector = AppInjector.getInjector();
+        this.http = injector.get(HttpClient);
+        this.symbolService = injector.get(SymbolService);
+        // this.message = injector.get(MessageService);
+        this.dialog = injector.get(MatDialog);
+        this.appState = injector.get(AppState);
+        this.eventBus = injector.get(EventBus)
+
+        // ✅ 监听 layerView 创建事件（ArcGIS 内部触发）
+        this.on("layerview-create", (e) => {
+            this.layerView = e.layerView as __esri.GraphicsLayerView;
         });
 
-        this.message.createGeoComplete$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(g => {
-                if (g.layer === this) {
-                    this.createFeature(g)
-                }
-            })
-
-        this.message.updeateGeoComplete$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(g => {
-                if (g.layer === this) {
-                    this.editGeometry(g)
-                }
-            })
-
-        this.message.editAttributes$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(g => {
-                if (g.layer === this) {
-                    this.editAttributes(g)
-                }
-            })
-
-        this.message.delFeature$
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(g => {
-                if (g.layer === this) {
-                    this.deleteFeature(g)
-                }
-            })
+        // ✅ 订阅全局消息流，实现通用交互（新增 / 更新 / 删除 / 编辑属性）
+        this.eventBus.on(AppEventType.CreateGeoComplete, g => g.layer === this && this.createFeature(g))
+        this.eventBus.on(AppEventType.UpdateGeoComplete, g => g.layer === this && this.editGeometry(g))
+        this.eventBus.on(AppEventType.EditAttributes, g => g.layer === this && this.editAttributes(g))
+        this.eventBus.on(AppEventType.DeleteFeature, g => g.layer === this && this.deleteFeature(g))
     }
 
+    /**
+     * ✅ 初始化图层：加载数据并绘制 Graphic
+     */
     async init(): Promise<void> {
-        this.removeAll()
+        this.removeAll();
+
         const data = await firstValueFrom(this.getInitData());
-        console.log(data)
         this.dataLoaded$.next(data);
         this.dataLoaded$.complete();
+
         data.forEach(item => {
             const { geom, ...rest } = item;
             const graphic = new Graphic({
@@ -109,204 +94,154 @@ export abstract class BaseLayer extends GraphicsLayer {
             });
             this.add(graphic);
         });
-
-        // BaseLayer.layers.set(this.layerName, this)
     }
 
-    // getLayer<T extends BaseLayer>(name: string): T | null {
-    //     return (BaseLayer.layers.get(name) as T) || null;
-    // }
+    // --------------------------- 抽象定义 ---------------------------
 
+    /** 子类必须实现：请求接口数据 */
     abstract getInitData(): Observable<any[]>;
-    abstract getGeometry(item: any): __esri.Geometry
-    abstract getSymbol(item: any): any
 
+    /** 子类必须实现：从接口数据构造 Geometry */
+    abstract getGeometry(item: any): __esri.Geometry;
+
+    /** 子类必须实现：获取符号 Symbol */
+    abstract getSymbol(item: any): any;
+
+    /** 子类必须定义：图层名称（用于接口 URL 拼接） */
     abstract layerName: string;
 
-    /** 单击事件 */
-    onClick(graphic: Graphic, event: __esri.ViewClickEvent) {
-    };
+    // --------------------------- 事件回调 ---------------------------
 
-    /** 双击事件 */
+    onClick?(graphic: Graphic, event: __esri.ViewClickEvent): void;
     onDoubleClick?(graphic: Graphic, event: __esri.ViewDoubleClickEvent): void;
-
-    /** 右键事件 */
     onRightClick?(graphic: Graphic, event: __esri.ViewClickEvent): void;
+    onMouseOver?(graphic: Graphic, event: __esri.ViewPointerMoveEvent): void;
+    onMouseOut?(graphic: Graphic, event: __esri.ViewPointerMoveEvent): void;
 
-    onMouseOver(graphic: Graphic, event: __esri.ViewPointerMoveEvent) { };
+    // --------------------------- 数据接口定义 ---------------------------
 
-    onMouseOut(graphic: Graphic, event: __esri.ViewPointerMoveEvent) { };
-
-    getCreateUrl?(): string
-
-    /**
-   * ✅ 子类可以选择性重写，指定属性对话框组件
-   */
-    getAttributeDialogComponent?(): Type<any>
-    /**
-  * ✅ 子类可以选择性重写，准备对话框的数据
-  */
-    // getAttributeDialogData?(): any;
-
+    getCreateApiUrl?(): string;
     getUpdateApiUrl?(id: number): string;
+    getDeleteApiUrl?(id: number): string;
+    getAttributeDialogComponent?(): Type<any>;
 
-    /** ---------------------------
-   * 数据操作接口
-   * --------------------------- */
+    // --------------------------- 通用业务逻辑 ---------------------------
 
-    /** 创建要素（新建） */
+    /** ✅ 创建要素：打开属性对话框 + 插入数据库 */
     async createFeature(newGraphic: Graphic) {
-        console.log('create feature', newGraphic)
-        // 1. 打开对话框，添加属性
-        // let data: any = this.getAttributeDialogData?.()
-        const dialogComponent = this.getAttributeDialogComponent?.()
-        const data={
-            editType:'room'
-        }
+        const dialogComponent = this.getAttributeDialogComponent?.();
+        if (!dialogComponent) return;
 
-        if (dialogComponent) {
-            this.dialog.open(dialogComponent,{data})
-                .afterClosed()
-                .pipe(first())
-                .subscribe(attr => {
-                    console.log(attr)
-                    if (!attr) {
-                        console.log("用户取消");
-                        newGraphic.destroy();
-                        return;
-                    }
-                    const data = {
-                        geom: GeomUtils.toMysqlAuto(newGraphic.geometry), ...attr
-                    }
-                    this.insertDb(data)
-                })
-        }
-    }
-
-
-    /** 编辑几何（修改位置/形状） */
-    async editGeometry(graphic: Graphic) {
-        let geom = graphic.geometry as __esri.Geometry;
-        // 2. 生成 WKT
-        const wkt = GeomUtils.toMysqlAuto(graphic.geometry);
-        const data = { geom: wkt }
-
-        // 4. 更新数据库
-        const id = graphic.attributes?.id; // 每个要素必须有 id
-        if (!id) {
-            console.error("要素缺少 id，无法更新数据库");
-            return;
-        }
-        this.updateDb(id, data)
-    }
-
-    /** 编辑属性（弹窗/表单提交后调用） */
-    editAttributes(graphic: Graphic) {
-        // 1、打开对话框
-        const dialogComponent = this.getAttributeDialogComponent?.()
-        // let data = this.getAttributeDialogData?.() || {};
-        const data={
-            attributes:graphic.attributes,
-            editType:this.layerName
-        }
-        this.message.clearOutline()
-
-        if (dialogComponent) {
-            this.dialog.open(dialogComponent, { data })
-                .afterClosed()
-                .pipe(first())
-                .subscribe(attr => {
-                    console.log(attr)
-                    if (!attr) {
-                        console.log("用户取消");
-                        return;
-                    }
-                    const id = graphic.attributes.id
-                    const data = attr;
-                    this.updateDb(id, data)
-                })
-        }
-    }
-
-    deleteFeature(g: Graphic) {
-        // this.remove(g);
-        // 2. 获取数据库主键 id
-        const id = g.attributes?.id;
-        if (!id) {
-            console.warn("该要素没有 id 属性，无法删除数据库记录");
-            return;
-        }
-
-        // 3. 调用后端接口
-        const apiUrl = `http://localhost:3000/api/${this.layerName}/${id}`
-        if (this.layerName && id) {
-            this.http.delete(apiUrl).subscribe({
-                next: (value: any) => {
-                    console.log('delete success', value.id)
-                    this.remove(g)
-                    this.message.clearOutline()
-                },
-                error(err) {
-                    console.log(err)
+        const data = { editType: this.layerName };
+        this.dialog.open(dialogComponent, { data })
+            .afterClosed()
+            .pipe(first())
+            .subscribe(attr => {
+                if (!attr) {
+                    newGraphic.destroy();
+                    return;
                 }
-            })
-        }
+                const postData = {
+                    geom: GeomUtils.toMysqlAuto(newGraphic.geometry),
+                    ...attr
+                };
+                this.insertDb(postData);
+            });
     }
 
-    /** 高亮（可选通用逻辑） */
+    /** ✅ 编辑几何：更新坐标字段 */
+    async editGeometry(graphic: Graphic) {
+        const id = graphic.attributes?.id;
+        if (!id) return console.error("缺少 id，无法更新");
+
+        const wkt = GeomUtils.toMysqlAuto(graphic.geometry);
+        this.updateDb(id, { geom: wkt });
+    }
+
+    /** ✅ 编辑属性：弹出表单修改属性 */
+    editAttributes(graphic: Graphic) {
+        const dialogComponent = this.getAttributeDialogComponent?.();
+        if (!dialogComponent) return;
+
+        const data = { attributes: graphic.attributes, editType: this.layerName };
+
+        this.dialog.open(dialogComponent, { data })
+            .afterClosed()
+            .pipe(first())
+            .subscribe(attr => {
+                if (!attr) return;
+                const id = graphic.attributes.id;
+                this.updateDb(id, attr);
+            });
+    }
+
+    /** ✅ 删除要素：调用接口 + 从图层移除 */
+    deleteFeature(g: Graphic) {
+        const id = g.attributes?.id;
+        if (!id) return console.warn("该要素没有 id，无法删除");
+        this.deleteDb(id)
+    }
+
+    // --------------------------- 高亮管理 ---------------------------
+
     highlight(graphic: Graphic) {
-        // TODO: 可以使用 Graphic.symbol 修改颜色或添加效果
-        this.clearHighlight()
-        if (!graphic) return;
-        this.highlightHandle = this.layerView.highlight(graphic)
+        this.clearHighlight();
+        if (!graphic || !this.layerView) return;
+        this.highlightHandle = this.layerView.highlight(graphic);
     }
 
-    /** 清除高亮 */
     clearHighlight() {
-        // TODO: 清除所有高亮效果
-        this.highlightObjects = [];
         if (this.highlightHandle) {
             this.highlightHandle.remove();
             this.highlightHandle = null;
         }
     }
 
-    private insertDb(data:any) {
-        if (this.getCreateUrl) {
-            this.http.post(this.getCreateUrl(), data).subscribe({
-                next: (value: any) => {
-                    console.log('create success', value)
-                    this.init()
-                },
-                error(err) {
-                    console.log(err)
-                }
-            })
-        }
+    // --------------------------- 数据操作 ---------------------------
+
+    private insertDb(data: any) {
+        const url = this.getCreateApiUrl?.();
+        if (!url) return;
+
+        this.http.post(url, data).subscribe({
+            next: (res: any) => {
+                console.log("create success", res);
+                this.init();
+            },
+            error: (err) => console.error(err)
+        });
     }
 
     private updateDb(id: number, data: any) {
-        const apiUrl = this.getUpdateApiUrl?.(id)
-        if (apiUrl) {
-            this.http.put(apiUrl, data).subscribe({
-                next: (value: any) => {
-                    console.log(this.layerName + 'update success', value.id)
-                    this.init()
-                },
-                error(err) {
-                    console.log(err)
-                }
-            })
-        }
+        const url = this.getUpdateApiUrl?.(id);
+        if (!url) return;
+
+        this.http.put(url, data).subscribe({
+            next: (res: any) => {
+                console.log(`${this.layerName} update success`, res.id);
+                this.init();
+            },
+            error: (err) => console.error(err)
+        });
     }
+
+    private deleteDb(id: number) {
+        const url = this.getDeleteApiUrl?.(id);
+        if (!url) return;
+
+        this.http.delete(url).subscribe({
+            next: (res: any) => {
+                console.log(`${this.layerName} delete success`, res.id);
+                this.init();
+            },
+            error: (err) => console.error(err)
+        });
+    }
+
+    // --------------------------- 销毁 ---------------------------
 
     override destroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
     }
 }
-
-
-
-
-
